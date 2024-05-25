@@ -1,5 +1,5 @@
 # 仅适配了以下节点
-- O/OpenAI
+- O/OpenAI           
 能力有限，目前仅支持在config.json中配置gpt模型                  
 有其他问题请在issue中报告
 
