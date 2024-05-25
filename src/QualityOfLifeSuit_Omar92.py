@@ -95,10 +95,12 @@ def get_api_key():
         with open(configPath, 'r') as f:  # Open the file and read the API key
             config = json.load(f)
         api_key = config["openAI_API_Key"]
+        model = config["model"]
+        max_tokens = config["max_tokens"]
     except:
         print("Error: OpenAI API key file not found OpenAI features wont work for you")
         return ""
-    return api_key  # Return the API key
+    return api_key,model,max_tokens  # Return the API key
 
 
 openAI_models = None
@@ -145,24 +147,8 @@ def get_init_message(isTags=False):
 #endregion chatGPTDefaultInitMessages
 def get_openAI_models():
     global openAI_models
-    if (openAI_models != None):
-        return openAI_models
-
-    install_openai()
-    import openai
-    # Set the API key for the OpenAI module
-    openai.api_key = get_api_key()
-
-    try:
-        models = openai.Model.list()  # Get the list of models
-    except:
-        print("Error: OpenAI API key is invalid OpenAI features wont work for you")
-        return []
-
-    openAI_models = []  # Create a list for the chat models
-    for model in models["data"]:  # Loop through the models
-        openAI_models.append(model["id"])  # Add the model to the list
-
+    openai.api_key,model, max_tokens= get_api_key()
+    openAI_models = ['gpt-4-1106-preview', 'gpt-4-0125-preview', 'gpt-4o', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k-0613']  # Create a list for the chat models
     return openAI_models  # Return the list of chat models
 
 
@@ -173,12 +159,9 @@ def get_gpt_models():
     global openAI_gpt_models
     if (openAI_gpt_models != None):
         return openAI_gpt_models
-    models = get_openAI_models()
-    openAI_gpt_models = []  # Create a list for the chat models
-    for model in models:  # Loop through the models
-        if ("gpt" in model.lower()):
-            openAI_gpt_models.append(model)
-
+    models = ['gpt-4-1106-preview', 'gpt-4-0125-preview', 'gpt-4o', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k-0613']
+    openAI_models = ['gpt-4-1106-preview', 'gpt-4-0125-preview', 'gpt-4o', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k-0613']  # Create a list for the chat models
+    openAI_gpt_models = openAI_models
     return openAI_gpt_models  # Return the list of chat models
 
 
@@ -208,11 +191,13 @@ class O_ChatGPT_O:
     def fun(self,  model, prompt,behaviour, seed):
         install_openai()  # Install the OpenAI module if not already installed
         import openai  # Import the OpenAI module
-
+        import json
+        import time
+        import requests
         # Get the API key from the file
-        api_key = get_api_key()
-
-        openai.api_key = api_key  # Set the API key for the OpenAI module
+        api_key, model, max_tokens = get_api_key()
+        authorization = "Bearer " + api_key # Set the API key
+        # openai.api_key = api_key  # Set the API key for the OpenAI module
         initMessage = "";
         if(behaviour == "description"):
             initMessage = get_init_message(False);
@@ -220,25 +205,182 @@ class O_ChatGPT_O:
             initMessage = get_init_message(True);
         # Create a chat completion using the OpenAI module
         try:
-            completion = openai.ChatCompletion.create(
-                model=model,
-                messages=[
-                    {"role": "user", "content":initMessage},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-        except:  # sometimes it fails first time to connect to server
-            completion = openai.ChatCompletion.create(
-                model=model,
-                messages=[
-                    {"role": "user", "content": initMessage},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-        # Get the answer from the chat completion
-        answer = completion["choices"][0]["message"]["content"]
-        return (answer,)  # Return the answer as a string
+            title = "confyui"
+            headers = {
+            "content-type": "application/json",
+            "accept": "application/json, text/plain, */*",
+            "accept-language": "zh-CN",
+            "authorization": authorization,
+            "origin": "https://ai.ashuiai.com",
+            "priority": "u=1, i",
+            "referer": "https://ai.ashuiai.com/",
+            "sec-ch-ua": "\"Microsoft Edge\";v=\"125\", \"Chromium\";v=\"125\", \"Not.A/Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0",
+            }
 
+            # 新建对话设置model和提示词以及插件
+            # systemMessage 提示词
+            # model 有 max_tokens:8192,model:gpt-3.5-turbo-16k-0613
+            #          max_tokens:2048,model:gpt-4-0125-preview
+            #          max_tokens:2048,model:gpt-4o
+            #          max_tokens:4096,model:gpt-4-1106-preview
+            # GetCurrentWeather 获取天气
+            # search-engine 联网搜索
+            url_model = "https://api22.xiabb.chat/chatapi/chat/save"
+            pargram = {
+            "model": model,
+            "is_webSearch": False,
+            "message": [],
+            "systemMessage": None,
+            "requestMsgCount": 6,
+            "temperature": 0.8,
+            "speechVoice": "Alloy",
+            "max_tokens": max_tokens,
+            "chatPluginIds": [
+                "GetCurrentWeather",
+                "search-engine"
+            ]
+            }
+            payload = {
+            "id": 0,
+            "title": title,
+            "isLock": False,
+            "systemMessage": initMessage,
+            "params": json.dumps(pargram)}
+
+            response = requests.post(url_model, json=payload, headers=headers)
+            if response.status_code == 200:
+                topic_id = response.json()["result"]
+                print("新建对话成功，对话id为：", topic_id)
+            else:
+                print("新建对话失败")
+            # time.sleep(0.5)
+            # 发送问题
+            url_question = "https://api22.xiabb.chat/chatapi/chat/message"
+
+            payload = {
+            "topicId": topic_id,
+            "messages": [],
+            "content": prompt,
+            "contentFiles": []
+            }
+
+            response = requests.post(url_question, json=payload, headers=headers)
+            answer = response.json()["result"][1]
+            if response.status_code == 200:
+                print("问题发送成功，问题为：", payload["content"])
+            else:
+                print("问题发送失败")
+            time.sleep(0.3)
+        except:  # sometimes it fails first time to connect to server
+            title = "confyui"
+            headers = {
+            "content-type": "application/json",
+            "accept": "application/json, text/plain, */*",
+            "accept-language": "zh-CN",
+            "authorization": authorization,
+            "origin": "https://ai.ashuiai.com",
+            "priority": "u=1, i",
+            "referer": "https://ai.ashuiai.com/",
+            "sec-ch-ua": "\"Microsoft Edge\";v=\"125\", \"Chromium\";v=\"125\", \"Not.A/Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0",
+            "xx-cf-source": "U2FsdGVkX18+1QmcfhP/8wGAl0YEPlBeDpidJa+NbMM411zXD5mJUJ1jH5hW7cb8"
+            }
+
+            # 新建对话设置model和提示词以及插件
+            # systemMessage 提示词
+            # model 有 max_tokens:8192,model:gpt-3.5-turbo-16k-0613
+            #          max_tokens:2048,model:gpt-4-0125-preview
+            #          max_tokens:2048,model:gpt-4o
+            #          max_tokens:4096,model:gpt-4-1106-preview
+            # GetCurrentWeather 获取天气
+            # search-engine 联网搜索
+            url_model = "https://api22.xiabb.chat/chatapi/chat/save"
+            pargram = {
+            "model": model,
+            "is_webSearch": False,
+            "message": [],
+            "systemMessage": None,
+            "requestMsgCount": 6,
+            "temperature": 0.8,
+            "speechVoice": "Alloy",
+            "max_tokens": max_tokens,
+            "chatPluginIds": [
+                "GetCurrentWeather",
+                "search-engine"
+            ]
+            }
+            payload = {
+            "id": 0,
+            "title": title,
+            "isLock": False,
+            "systemMessage": initMessage,
+            "params": json.dumps(pargram)}
+            response = requests.post(url_model, json=payload, headers=headers)
+            if response.status_code == 200:
+                topic_id = response.json()["result"]
+                print("新建对话成功，对话id为：", topic_id)
+            else:
+                print("新建对话失败")
+            # time.sleep(0.5)
+            # 发送问题
+            url_question = "https://api22.xiabb.chat/chatapi/chat/message"
+
+            payload = {
+            "topicId": topic_id,
+            "messages": [],
+            "content": prompt,
+            "contentFiles": []
+            }
+
+            response = requests.post(url_question, json=payload, headers=headers)
+            answer = response.json()["result"][1]
+            if response.status_code == 200:
+                print("问题发送成功，问题为：", payload["content"])
+            else:
+                print("问题发送失败")
+            time.sleep(0.3)           
+        # Get the answer from the chat completion
+        # 获取回答
+        url_answer = f"https://api22.xiabb.chat/chatapi/chat/message/{answer}"
+        headers_answer = {
+        "accept": "*/*",
+        "accept-language": "zh-CN",
+        "authorization": authorization,
+        "content-length": "0",
+        "Origin": "https://ai.ashuiai.com",
+        "priority": "u=1, i",
+        "referer": "https://ai.ashuiai.com/",
+        "sec-ch-ua": "\"Microsoft Edge\";v=\"125\", \"Chromium\";v=\"125\", \"Not.A/Brand\";v=\"24\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\"",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "cross-site",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0"
+        }
+        response = requests.post(url_answer, headers=headers_answer)
+        print(response.text)
+        # 删除对话
+        url_del = f"https://api22.xiabb.chat/chatapi/chat/{topic_id}"
+        payload = {}
+        response = requests.post(url_del, json=payload, headers=headers)
+        time.sleep(0.5)
+        if response.status_code == 200:
+            print("删除对话成功")
+        else:
+            print("删除对话失败")   
+        return response.text  # Return the answer as a string     
 
 class O_ChatGPT_medium_O:
     """
@@ -266,32 +408,215 @@ class O_ChatGPT_medium_O:
     def fun(self,  model, prompt, initMsg, seed):
         install_openai()  # Install the OpenAI module if not already installed
         import openai  # Import the OpenAI module
-
+        import json
+        import time
+        import requests
         # Get the API key from the file
-        api_key = get_api_key()
-
-        openai.api_key = api_key  # Set the API key for the OpenAI module
-
+        api_key, model, max_tokens = get_api_key()
+        authorization = "Bearer " + api_key # Set the API key
+        # openai.api_key = api_key  # Set the API key for the OpenAI module
+        model = model
+        print("model",model)
         # Create a chat completion using the OpenAI module
         try:
-            completion = openai.ChatCompletion.create(
-                model=model,
-                messages=[
-                    {"role": "user", "content": initMsg},
-                    {"role": "user", "content": prompt}
-                ]
-            )
+            title = "confyui"
+            headers = {
+            "content-type": "application/json",
+            "accept": "application/json, text/plain, */*",
+            "accept-language": "zh-CN",
+            "authorization": authorization,
+            "origin": "https://ai.ashuiai.com",
+            "priority": "u=1, i",
+            "referer": "https://ai.ashuiai.com/",
+            "sec-ch-ua": "\"Microsoft Edge\";v=\"125\", \"Chromium\";v=\"125\", \"Not.A/Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0",
+            }
+
+            # 新建对话设置model和提示词以及插件
+            # systemMessage 提示词
+            # model 有 max_tokens:8192,model:gpt-3.5-turbo-16k-0613
+            #          max_tokens:2048,model:gpt-4-0125-preview
+            #          max_tokens:2048,model:gpt-4o
+            #          max_tokens:4096,model:gpt-4-1106-preview
+            # GetCurrentWeather 获取天气
+            # search-engine 联网搜索
+            url_model = "https://api22.xiabb.chat/chatapi/chat/save"
+            pargram = {
+            "model": model,
+            "is_webSearch": False,
+            "message": [],
+            "systemMessage": None,
+            "requestMsgCount": 6,
+            "temperature": 0.8,
+            "speechVoice": "Alloy",
+            "max_tokens": max_tokens,
+            "chatPluginIds": [
+                "GetCurrentWeather",
+                "search-engine"
+            ]
+            }
+            payload = {
+            "id": 0,
+            "title": title,
+            "isLock": False,
+            "systemMessage": initMessage,
+            "params": json.dumps(pargram)}
+
+            response = requests.post(url_model, json=payload, headers=headers)
+            if response.status_code == 200:
+                topic_id = response.json()["result"]
+                print("新建对话成功，对话id为：", topic_id)
+            else:
+                print("新建对话失败")
+            # time.sleep(0.5)
+            # 发送问题
+            url_question = "https://api22.xiabb.chat/chatapi/chat/message"
+
+            payload = {
+            "topicId": topic_id,
+            "messages": [],
+            "content": prompt,
+            "contentFiles": []
+            }
+
+            response = requests.post(url_question, json=payload, headers=headers)
+            answer = response.json()["result"][1]
+            if response.status_code == 200:
+                print("问题发送成功，问题为：", payload["content"])
+            else:
+                print("问题发送失败")
+            time.sleep(0.3)
+            # completion = openai.ChatCompletion.create(
+            #     model=model,
+            #     messages=[
+            #         {"role": "user", "content": initMsg},
+            #         {"role": "user", "content": prompt}
+            #     ]
+            # )
         except:  # sometimes it fails first time to connect to server
-            completion = openai.ChatCompletion.create(
-                model=model,
-                messages=[
-                    {"role": "user", "content": initMsg},
-                    {"role": "user", "content": prompt}
-                ]
-            )
+            title = "confyui"
+            headers = {
+            "content-type": "application/json",
+            "accept": "application/json, text/plain, */*",
+            "accept-language": "zh-CN",
+            "authorization": authorization,
+            "origin": "https://ai.ashuiai.com",
+            "priority": "u=1, i",
+            "referer": "https://ai.ashuiai.com/",
+            "sec-ch-ua": "\"Microsoft Edge\";v=\"125\", \"Chromium\";v=\"125\", \"Not.A/Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0",
+            "xx-cf-source": "U2FsdGVkX18+1QmcfhP/8wGAl0YEPlBeDpidJa+NbMM411zXD5mJUJ1jH5hW7cb8"
+            }
+
+            # 新建对话设置model和提示词以及插件
+            # systemMessage 提示词
+            # model 有 max_tokens:8192,model:gpt-3.5-turbo-16k-0613
+            #          max_tokens:2048,model:gpt-4-0125-preview
+            #          max_tokens:2048,model:gpt-4o
+            #          max_tokens:4096,model:gpt-4-1106-preview
+            # GetCurrentWeather 获取天气
+            # search-engine 联网搜索
+            url_model = "https://api22.xiabb.chat/chatapi/chat/save"
+            pargram = {
+            "model": model,
+            "is_webSearch": False,
+            "message": [],
+            "systemMessage": None,
+            "requestMsgCount": 6,
+            "temperature": 0.8,
+            "speechVoice": "Alloy",
+            "max_tokens": max_tokens,
+            "chatPluginIds": [
+                "GetCurrentWeather",
+                "search-engine"
+            ]
+            }
+            payload = {
+            "id": 0,
+            "title": title,
+            "isLock": False,
+            "systemMessage": initMessage,
+            "params": json.dumps(pargram)}
+
+            response = requests.post(url_model, json=payload, headers=headers)
+            if response.status_code == 200:
+                topic_id = response.json()["result"]
+                print("新建对话成功，对话id为：", topic_id)
+            else:
+                print("新建对话失败")
+            # time.sleep(0.5)
+            # 发送问题
+            url_question = "https://api22.xiabb.chat/chatapi/chat/message"
+
+            payload = {
+            "topicId": topic_id,
+            "messages": [],
+            "content": prompt,
+            "contentFiles": []
+            }
+
+            response = requests.post(url_question, json=payload, headers=headers)
+            answer = response.json()["result"][1]
+            if response.status_code == 200:
+                print("问题发送成功，问题为：", payload["content"])
+            else:
+                print("问题发送失败")
+            time.sleep(0.3)
+            # completion = openai.ChatCompletion.create(
+            #     model=model,
+            #     messages=[
+            #         {"role": "user", "content": initMsg},
+            #         {"role": "user", "content": prompt}
+            #     ]
+            # )
         # Get the answer from the chat completion
-        answer = completion["choices"][0]["message"]["content"]
-        return (answer,)  # Return the answer as a string
+        # 获取回答
+        url_answer = f"https://api22.xiabb.chat/chatapi/chat/message/{answer}"
+
+        headers_answer = {
+        "accept": "*/*",
+        "accept-language": "zh-CN",
+        "authorization": authorization,
+        "content-length": "0",
+        "Origin": "https://ai.ashuiai.com",
+        "priority": "u=1, i",
+        "referer": "https://ai.ashuiai.com/",
+        "sec-ch-ua": "\"Microsoft Edge\";v=\"125\", \"Chromium\";v=\"125\", \"Not.A/Brand\";v=\"24\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\"",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "cross-site",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0"
+        }
+
+        response = requests.post(url_answer, headers=headers_answer)
+        print(response.text)
+        # time.sleep(1)
+        # 删除对话
+        url_del = f"https://api22.xiabb.chat/chatapi/chat/{topic_id}"
+
+        payload = {}
+
+        response = requests.post(url_del, json=payload, headers=headers)
+        time.sleep(0.5)
+        if response.status_code == 200:
+            print("删除对话成功")
+        else:
+            print("删除对话失败")
+        return response.text  # Return the answer as a string
+        # answer = completion["choices"][0]["message"]["content"]
+        # return (answer,)  # Return the answer as a string
 
 
 # region advanced
@@ -317,14 +642,14 @@ class load_openAI_O:
         import openai  # Import the OpenAI module
 
         # Get the API key from the file
-        api_key = get_api_key()
+        api_key, model, max_tokens = get_api_key()
         openai.api_key = api_key  # Set the API key for the OpenAI module
-
-        return (
-            {
-                "openai": openai,  # Return openAI model
-            },
-        )
+        return true
+        # return (
+        #     {
+        #         "openai": openai,  # Return openAI model
+        #     },
+        # )
 # region ChatGPT
 
 
@@ -346,7 +671,7 @@ class openAi_chat_message_O:
     FUNCTION = "fun"  # Define the function name for the node
     # Define the category for the node
     CATEGORY = "O/OpenAI/Advanced/ChatGPT"
-
+    #TODO: 需要观察返回值
     def fun(self, role, content):
         return (
             {
@@ -373,7 +698,7 @@ class openAi_chat_messages_Combine_O:
     FUNCTION = "fun"  # Define the function name for the node
     # Define the category for the node
     CATEGORY = "O/OpenAI/Advanced/ChatGPT"
-
+    #TODO: 需要观察返回值
     def fun(self, message1, message2):
         messages = message1["messages"] + \
             message2["messages"]  # compine messages
@@ -414,21 +739,205 @@ class openAi_chat_completion_O:
         # Create a chat completion using the OpenAI module
         openai = openai["openai"]
         try:
-            completion = openai.ChatCompletion.create(
-                model=model,
-                messages=messages["messages"]
-            )
+            title = "confyui"
+            headers = {
+            "content-type": "application/json",
+            "accept": "application/json, text/plain, */*",
+            "accept-language": "zh-CN",
+            "authorization": authorization,
+            "origin": "https://ai.ashuiai.com",
+            "priority": "u=1, i",
+            "referer": "https://ai.ashuiai.com/",
+            "sec-ch-ua": "\"Microsoft Edge\";v=\"125\", \"Chromium\";v=\"125\", \"Not.A/Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0",
+            "xx-cf-source": "U2FsdGVkX18+1QmcfhP/8wGAl0YEPlBeDpidJa+NbMM411zXD5mJUJ1jH5hW7cb8"
+            }
+
+            # 新建对话设置model和提示词以及插件
+            # systemMessage 提示词
+            # model 有 max_tokens:8192,model:gpt-3.5-turbo-16k-0613
+            #          max_tokens:2048,model:gpt-4-0125-preview
+            #          max_tokens:2048,model:gpt-4o
+            #          max_tokens:4096,model:gpt-4-1106-preview
+            # GetCurrentWeather 获取天气
+            # search-engine 联网搜索
+            url_model = "https://api22.xiabb.chat/chatapi/chat/save"
+            pargram = {
+            "model": model,
+            "is_webSearch": False,
+            "message": [],
+            "systemMessage": None,
+            "requestMsgCount": 6,
+            "temperature": 0.8,
+            "speechVoice": "Alloy",
+            "max_tokens": max_tokens,
+            "chatPluginIds": [
+                "GetCurrentWeather",
+                "search-engine"
+            ]
+            }
+            payload = {
+            "id": 0,
+            "title": title,
+            "isLock": False,
+            "systemMessage": initMessage,
+            "params": json.dumps(pargram)}
+
+            response = requests.post(url_model, json=payload, headers=headers)
+            if response.status_code == 200:
+                topic_id = response.json()["result"]
+                print("新建对话成功，对话id为：", topic_id)
+            else:
+                print("新建对话失败")
+            # time.sleep(0.5)
+            # 发送问题
+            url_question = "https://api22.xiabb.chat/chatapi/chat/message"
+
+            payload = {
+            "topicId": topic_id,
+            "messages": [],
+            "content": prompt,
+            "contentFiles": []
+            }
+
+            response = requests.post(url_question, json=payload, headers=headers)
+            answer = response.json()["result"][1]
+            if response.status_code == 200:
+                print("问题发送成功，问题为：", payload["content"])
+            else:
+                print("问题发送失败")
+            time.sleep(0.3)
+            # completion = openai.ChatCompletion.create(
+            #     model=model,
+            #     messages=messages["messages"]
+            # )
         except:  # sometimes it fails first time to connect to server
-            completion = openai.ChatCompletion.create(
-                model=model,
-                messages=messages["messages"]
-            )
+            title = "confyui"
+            headers = {
+            "content-type": "application/json",
+            "accept": "application/json, text/plain, */*",
+            "accept-language": "zh-CN",
+            "authorization": authorization,
+            "origin": "https://ai.ashuiai.com",
+            "priority": "u=1, i",
+            "referer": "https://ai.ashuiai.com/",
+            "sec-ch-ua": "\"Microsoft Edge\";v=\"125\", \"Chromium\";v=\"125\", \"Not.A/Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0",
+            "xx-cf-source": "U2FsdGVkX18+1QmcfhP/8wGAl0YEPlBeDpidJa+NbMM411zXD5mJUJ1jH5hW7cb8"
+            }
+
+            # 新建对话设置model和提示词以及插件
+            # systemMessage 提示词
+            # model 有 max_tokens:8192,model:gpt-3.5-turbo-16k-0613
+            #          max_tokens:2048,model:gpt-4-0125-preview
+            #          max_tokens:2048,model:gpt-4o
+            #          max_tokens:4096,model:gpt-4-1106-preview
+            # GetCurrentWeather 获取天气
+            # search-engine 联网搜索
+            url_model = "https://api22.xiabb.chat/chatapi/chat/save"
+            pargram = {
+            "model": model,
+            "is_webSearch": False,
+            "message": [],
+            "systemMessage": None,
+            "requestMsgCount": 6,
+            "temperature": 0.8,
+            "speechVoice": "Alloy",
+            "max_tokens": max_tokens,
+            "chatPluginIds": [
+                "GetCurrentWeather",
+                "search-engine"
+            ]
+            }
+            payload = {
+            "id": 0,
+            "title": title,
+            "isLock": False,
+            "systemMessage": initMessage,
+            "params": json.dumps(pargram)}
+
+            response = requests.post(url_model, json=payload, headers=headers)
+            if response.status_code == 200:
+                topic_id = response.json()["result"]
+                print("新建对话成功，对话id为：", topic_id)
+            else:
+                print("新建对话失败")
+            # time.sleep(0.5)
+            # 发送问题
+            url_question = "https://api22.xiabb.chat/chatapi/chat/message"
+
+            payload = {
+            "topicId": topic_id,
+            "messages": [],
+            "content": prompt,
+            "contentFiles": []
+            }
+
+            response = requests.post(url_question, json=payload, headers=headers)
+            answer = response.json()["result"][1]
+            if response.status_code == 200:
+                print("问题发送成功，问题为：", payload["content"])
+            else:
+                print("问题发送失败")
+            time.sleep(0.3)
+            # completion = openai.ChatCompletion.create(
+            #     model=model,
+            #     messages=messages["messages"]
+            # )
         # Get the answer from the chat completion
-        content = completion["choices"][0]["message"]["content"]
+        # 获取回答   
+        url_answer = f"https://api22.xiabb.chat/chatapi/chat/message/{answer}"
+
+        headers_answer = {
+        "accept": "*/*",
+        "accept-language": "zh-CN",
+        "authorization": authorization,
+        "content-length": "0",
+        "Origin": "https://ai.ashuiai.com",
+        "priority": "u=1, i",
+        "referer": "https://ai.ashuiai.com/",
+        "sec-ch-ua": "\"Microsoft Edge\";v=\"125\", \"Chromium\";v=\"125\", \"Not.A/Brand\";v=\"24\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\"",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "cross-site",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0"
+        }
+
+        response = requests.post(url_answer, headers=headers_answer)
+        # time.sleep(1)
+        print(response.text)
+
+        # 删除对话
+        url_del = f"https://api22.xiabb.chat/chatapi/chat/{topic_id}"
+
+        payload = {}
+
+        response = requests.post(url_del, json=payload, headers=headers)
+        time.sleep(0.5)
+        if response.status_code == 200:
+            print("删除对话成功")
+        else:
+            print("删除对话失败")   
         return (
-            content,  # Return the answer as a string
-            completion,  # Return the chat completion
-        )
+            response.text,
+            response)  # Return the answer as a string
+        # content = completion["choices"][0]["message"]["content"]
+        # return (
+        #     content,  # Return the answer as a string
+        #     completion,  # Return the chat completion
+        # )
 
 
 class DebugOpenAIChatMEssages_O:
@@ -505,7 +1014,7 @@ class openAi_Image_create_O:
     OUTPUT_NODE = True
     # Define the category for the node
     CATEGORY = "O/OpenAI/Advanced/Image"
-
+    # TODO: O/OpenAI/Advanced/Image该节点无法使用，没有对应的第三方api
     def fun(self, openai, prompt, number, size, seed):
         # Create a chat completion using the OpenAI module
         openai = openai["openai"]
@@ -563,7 +1072,7 @@ class openAi_Image_Edit_O:
     OUTPUT_NODE = True
     # Define the category for the node
     CATEGORY = "O/OpenAI/Advanced/Image"
-
+    # TODO: O/OpenAI/Advanced/Image该节点无法使用，没有对应的第三方api
     def fun(self, openai, image, prompt, number, size, seed):
         # Create a chat completion using the OpenAI module
         openai = openai["openai"]
@@ -645,7 +1154,7 @@ class openAi_Image_variation_O:
     OUTPUT_NODE = True
     # Define the category for the node
     CATEGORY = "O/OpenAI/Advanced/Image"
-
+    # TODO: O/OpenAI/Advanced/Image该节点无法使用，没有对应的第三方api
     def fun(self, openai, image, number, size, seed):
         # Create a chat completion using the OpenAI module
         openai = openai["openai"]
