@@ -1,0 +1,7 @@
+{
+    "autoUpdate": false,
+    "branch": "dev",
+    "openAI_API_Key": "xxxxx",
+    "model": "gpt-4-1106-preview",
+    "max_tokens" : 4096
+}
