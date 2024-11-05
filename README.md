@@ -2,6 +2,7 @@
 - O/OpenAI           
 能力有限，目前仅支持在config.json中配置gpt模型                  
 有其他问题请在issue中报告
+## 已经转向chat2api使用标准openai格式了
 
 ## Thank you to all the valuable contributors. Kindly submit any pull requests to the development branch instead of the main branch. Your efforts are greatly appreciated.
 
